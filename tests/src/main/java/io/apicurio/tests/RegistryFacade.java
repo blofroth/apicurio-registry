@@ -184,6 +184,8 @@ public class RegistryFacade {
                         "-Dquarkus.http.port=8081",
                         "-Dquarkus.log.console.level=DEBUG",
                         "-Dquarkus.log.category.\"io\".level=DEBUG",
+                        "-Dquarkus.http.access-log.enabled=true",
+                        "-Dquarkus.http.access-log.log-to-file=false",
                         "-jar", path));
                 int timeout = executor.execute(cmd, appEnv);
                 return timeout == 0;

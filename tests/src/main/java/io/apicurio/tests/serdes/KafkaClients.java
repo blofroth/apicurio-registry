@@ -39,6 +39,9 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
@@ -235,13 +238,12 @@ public class KafkaClients {
         return resultPromise;
     }
 
-    public static CompletableFuture<Integer> produceJsonSchemaApicurioMessages(String topicName, String subjectName,
-            int messageCount) {
+    public static CompletableFuture<Integer> produceJsonSchemaMessages(
+            String topicName, String subjectName, int messageCount, Properties props, String keySerializer,
+            String valueSerializer, String artifactIdStrategy) {
         CompletableFuture<Integer> resultPromise = CompletableFuture.supplyAsync(() -> {
-            Properties props = new Properties();
-            props.put(SerdeConfig.VALIDATION_ENABLED, Boolean.TRUE);
-            Producer<Object, Msg> producer = (Producer<Object, Msg>) KafkaClients.createProducer(props, StringSerializer.class.getName(),
-                    JsonSchemaKafkaSerializer.class.getName(), topicName, SimpleTopicIdStrategy.class.getName());
+            Producer<Object, Msg> producer = (Producer<Object, Msg>) KafkaClients.createProducer(props, keySerializer,
+                    valueSerializer, topicName, artifactIdStrategy);
             LOGGER.debug("++++++++++++++++++ Producer created.");
 
             int producedMessages = 0;
@@ -280,12 +282,32 @@ public class KafkaClients {
         return resultPromise;
     }
 
-    public static CompletableFuture<Integer> consumeJsonSchemaApicurioMessages(String topicName, int messageCount) {
+    public static CompletableFuture<Integer> produceJsonSchemaApicurioMessages(String topicName, String subjectName,
+                                                                               int messageCount) {
+        Properties props = new Properties();
+        props.put(SerdeConfig.VALIDATION_ENABLED, Boolean.TRUE);
+
+        return produceJsonSchemaMessages(topicName, subjectName, messageCount, props, StringSerializer.class.getName(),
+                JsonSchemaKafkaSerializer.class.getName(), SimpleTopicIdStrategy.class.getName());
+    }
+
+    public static CompletableFuture<Integer> produceJsonSchemaConfluentMessages(String topicName, String subjectName,
+                                                                                int messageCount) {
+        Properties props = new Properties();
+        props.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
+        props.put(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES, false);
+
+        return produceJsonSchemaMessages(topicName, subjectName, messageCount, props, StringSerializer.class.getName(),
+                KafkaJsonSchemaSerializer.class.getName(), TopicNameStrategy.class.getName());
+    }
+
+    public static CompletableFuture<Integer> consumeJsonSchemaMessages(
+            String topicName, int messageCount, Properties props, String keySerializer,
+            String valueSerializer) {
         CompletableFuture<Integer> resultPromise = CompletableFuture.supplyAsync(() -> {
-            Properties props = new Properties();
-            props.put(SerdeConfig.VALIDATION_ENABLED, Boolean.TRUE);
+
             final Consumer<Long, Msg> consumer = (Consumer<Long, Msg>) KafkaClients.createConsumer(
-                    StringDeserializer.class.getName(), JsonSchemaKafkaDeserializer.class.getName(), topicName);
+                    props, keySerializer, valueSerializer, topicName);
             consumer.subscribe(Collections.singletonList(topicName));
 
             AtomicInteger consumedMessages = new AtomicInteger();
@@ -293,7 +315,7 @@ public class KafkaClients {
             try {
                 while (consumedMessages.get() < messageCount) {
 
-                    final ConsumerRecords<Long, Msg> records = consumer.poll(Duration.ofSeconds(1));
+                    final ConsumerRecords<Long, Msg> records = consumer.poll(Duration.ofSeconds(5));
                     if (records.count() == 0) {
                         LOGGER.info("None found");
                     } else {
@@ -320,6 +342,23 @@ public class KafkaClients {
         }
 
         return resultPromise;
+    }
+
+    public static CompletableFuture<Integer> consumeJsonSchemaApicurioMessages(String topicName, int messageCount) {
+        Properties props = new Properties();
+        props.put(SerdeConfig.VALIDATION_ENABLED, Boolean.TRUE);
+
+        return consumeJsonSchemaMessages(topicName, messageCount, props,
+                StringDeserializer.class.getName(), JsonSchemaKafkaDeserializer.class.getName());
+    }
+
+    public static CompletableFuture<Integer> consumeJsonSchemaConfluentMessages(String topicName, int messageCount) {
+        Properties props = new Properties();
+        props.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
+        props.put(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES, false);
+
+        return consumeJsonSchemaMessages(topicName, messageCount, props,
+                StringDeserializer.class.getName(), KafkaJsonSchemaDeserializer.class.getName());
     }
 
     public static CompletableFuture<Integer> produceProtobufMessages(String topicName, String subjectName, int messageCount) {

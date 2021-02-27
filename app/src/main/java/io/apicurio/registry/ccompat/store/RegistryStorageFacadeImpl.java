@@ -16,10 +16,7 @@
 
 package io.apicurio.registry.ccompat.store;
 
-import io.apicurio.registry.ccompat.dto.CompatibilityCheckResponse;
-import io.apicurio.registry.ccompat.dto.Schema;
-import io.apicurio.registry.ccompat.dto.SchemaContent;
-import io.apicurio.registry.ccompat.dto.SubjectVersion;
+import io.apicurio.registry.ccompat.dto.*;
 import io.apicurio.registry.ccompat.rest.error.ConflictException;
 import io.apicurio.registry.ccompat.rest.error.UnprocessableEntityException;
 import io.apicurio.registry.content.ContentHandle;
@@ -90,8 +87,9 @@ public class RegistryStorageFacadeImpl implements RegistryStorageFacade {
     }
 
     @Override
-    public SchemaContent getSchemaContent(int globalId) throws ArtifactNotFoundException, RegistryStorageException {
-        return FacadeConverter.convert(storage.getArtifactVersion(globalId));
+    public SchemaInfo getSchemaContent(int globalId) throws ArtifactNotFoundException, RegistryStorageException {
+        SchemaContent convert = FacadeConverter.convert(storage.getArtifactVersion(globalId));
+        return SchemaInfo.builder().schema(convert.getSchema()).schemaType("JSON").build();
         // TODO StoredArtifact should contain artifactId IF we are not treating globalId separately
     }
 

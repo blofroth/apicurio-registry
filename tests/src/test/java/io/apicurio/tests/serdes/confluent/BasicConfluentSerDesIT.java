@@ -16,26 +16,27 @@
 
 package io.apicurio.tests.serdes.confluent;
 
-import static io.apicurio.tests.Constants.CLUSTER;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.io.IOException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
+import io.apicurio.registry.utils.tests.TestUtils;
+import io.apicurio.tests.ConfluentBaseIT;
+import io.apicurio.tests.Constants;
+import io.apicurio.tests.serdes.KafkaClients;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import io.apicurio.registry.utils.tests.TestUtils;
-import io.apicurio.tests.ConfluentBaseIT;
-import io.apicurio.tests.serdes.KafkaClients;
-import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.IOException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static io.apicurio.tests.Constants.CLUSTER;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag(CLUSTER)
 public class BasicConfluentSerDesIT extends ConfluentBaseIT {
@@ -55,6 +56,7 @@ public class BasicConfluentSerDesIT extends ConfluentBaseIT {
         KafkaClients.produceAvroConfluentMessagesTopicStrategy(topicName, subjectName, schema, 10, schemaKey).get(5, TimeUnit.SECONDS);
         KafkaClients.consumeAvroConfluentMessages(topicName, 10).get(5, TimeUnit.SECONDS);
     }
+
 
     @Test
     void testAvroConfluentSerDesFail() throws IOException, RestClientException, TimeoutException {
@@ -163,6 +165,47 @@ public class BasicConfluentSerDesIT extends ConfluentBaseIT {
         KafkaClients.consumeAvroApicurioMessages(topicName1, 10).get(5, TimeUnit.SECONDS);
         KafkaClients.consumeAvroApicurioMessages(topicName2, 10).get(5, TimeUnit.SECONDS);
         KafkaClients.consumeAvroApicurioMessages(topicName3, 10).get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void testJsonSchemaConfluentSerDes() throws InterruptedException, ExecutionException, TimeoutException, IOException, RestClientException {
+        String jsonSchema = "{" +
+                "    \"$id\": \"https://example.com/message.schema.json\"," +
+                "    \"$schema\": \"http://json-schema.org/draft-07/schema#\"," +
+                "    \"required\": [" +
+                "        \"message\"," +
+                "        \"time\"" +
+                "    ]," +
+                "    \"type\": \"object\"," +
+                "    \"properties\": {" +
+                "        \"message\": {" +
+                "            \"description\": \"\"," +
+                "            \"type\": \"string\"" +
+                "        }," +
+                "        \"time\": {" +
+                "            \"description\": \"\"," +
+                "            \"type\": \"number\"" +
+                "        }" +
+                "    }" +
+                "}";
+        String artifactId = TestUtils.generateArtifactId();
+        String subjectName = TestUtils.generateSubject() + "-value";
+        kafkaCluster.createTopic(artifactId, 1, 1);
+        LOGGER.debug("++++++++++++++++++ Created topic: {}", artifactId);
+
+        ParsedSchema pschema = new JsonSchema(jsonSchema);
+        int id = createArtifactViaConfluentClient(pschema, subjectName);
+        LOGGER.debug("++++++++++++++++++ Artifact created: {}", id);
+
+        TestUtils.waitFor(
+                "Artifact not registered",
+                Constants.POLL_INTERVAL,
+                Constants.TIMEOUT_GLOBAL,
+                () -> registryClient.getArtifactMetaDataByGlobalId(id) != null
+        );
+
+        KafkaClients.produceJsonSchemaConfluentMessages(artifactId, subjectName, 10).get(5, TimeUnit.SECONDS);
+        KafkaClients.consumeJsonSchemaConfluentMessages(artifactId, 10).get(5, TimeUnit.SECONDS);
     }
 
     @BeforeAll
